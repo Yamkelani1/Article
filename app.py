@@ -1,21 +1,27 @@
+import os
+from openai import OpenAI  # OpenRouter uses the standard OpenAI client SDK
 import streamlit as st
+from transformers import pipeline
 
-def analyze_article(url):
-    return f"Summary for {url}"
+st.set_page_config(page_title="Article Analyzer", layout="centered")
 
-st.title("Article Analyser")
-url = st.text_input("Enter Article URL:")
+# Retrieve API Key securely from Streamlit Secrets or Environment Variables
+OPENROUTER_API_KEY = st.secrets.get(
+    "OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", "")
+)
 
-if st.button("Analyze"):
-    if url:
-        result = analyze_article(url)
-        st.write(result)
+# Initialize Hugging Face sentiment pipeline with caching
 
-# Load environment variable
-OPENROUTER_API_KEY = os.getenv("OPENROUTER_API_KEY", "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")
 
-# Initialize Hugging Face sentiment pipeline
-sentiment_analyzer = pipeline("sentiment-analysis")
+@st.cache_resource
+def load_sentiment_analyzer():
+    return pipeline(
+        "sentiment-analysis",
+        model="distilbert/distilbert-base-uncased-finetuned-sst-2-english",
+    )
+
+
+sentiment_analyzer = load_sentiment_analyzer()
 
 
 def analyze_sentiment(text):
@@ -25,18 +31,22 @@ def analyze_sentiment(text):
     result = sentiment_analyzer(text[:512])[0]
     label = result["label"]
     score = result["score"]
-    return f"Sentiment: {label}\nConfidence: {score:.2%}"
+    return f"**Sentiment:** {label}\n\n**Confidence:** {score:.2%}"
 
 
 def summarize_with_llm(text):
-    """Summarize text using OpenRouter free LLM."""
+    """Summarize text using OpenRouter free LLM via OpenAI SDK."""
     if not text.strip():
         return "Please enter some text to summarize."
     if not OPENROUTER_API_KEY:
-        return "Error: OPENROUTER_API_KEY not set. Please add it to your .env file."
+        return "Error: OPENROUTER_API_KEY not set in Secrets/Environment."
 
-    with OpenRouter(api_key=OPENROUTER_API_KEY) as client:
-        response = client.chat.send(
+    try:
+        client = OpenAI(
+            base_url="https://openrouter.ai/api/v1",
+            api_key=OPENROUTER_API_KEY,
+        )
+        response = client.chat.completions.create(
             model="nvidia/nemotron-3-ultra-550b-a55b:free",
             messages=[
                 {
@@ -45,55 +55,63 @@ def summarize_with_llm(text):
                 },
                 {"role": "user", "content": text},
             ],
-            stream=False,
         )
-    return response.choices[0].message.content
+        return response.choices[0].message.content
+    except Exception as e:
+        return f"API Error: {str(e)}"
 
-def full_analysis(text):
-    """Run both sentiment analysis and summarization."""
-    if not text.strip():
-        return "Please enter some text to analyze."
-    sentiment_result = analyze_sentiment(text)
-    summary_result = summarize_with_llm(text)
-    return f"--- SENTIMENT ---\n{sentiment_result}\n\n--- SUMMARY ---\n{summary_result}"
 
-# Test
-# Build Gradio interface
-with gr.Blocks() as demo:
-    gr.Markdown("# Article Analyzer\nPaste any article to get AI-powered sentiment analysis and summarization.")
+# --- UI LAYOUT ---
+st.title("Article Analyzer")
+st.caption(
+    "Paste any article to get AI-powered sentiment analysis and summarization."
+)
 
-    with gr.Tab("Summarize"):
-        summary_input = gr.Textbox(
-            label="Article Text",
-            placeholder="Paste your article here...",
-            lines=8,
-        )
-        summary_button = gr.Button("Summarize")
-        summary_output = gr.Textbox(label="Summary", lines=4)
-        summary_button.click(
-            fn=summarize_with_llm, inputs=summary_input, outputs=summary_output
-        )
-        with gr.Tab("Sentiment Analysis"):
-         sentiment_input = gr.Textbox(
-         label="Article Text",
-         placeholder="Paste your article here...",
-         lines=8,
+tab1, tab2, tab3 = st.tabs(["Summarize", "Sentiment Analysis", "Full Analysis"])
+
+# Tab 1: Summarize
+with tab1:
+    summary_input = st.text_area(
+        "Article Text",
+        placeholder="Paste your article here...",
+        height=200,
+        key="sum_in",
     )
-    sentiment_button = gr.Button("Analyze Sentiment")
-    sentiment_output = gr.Textbox(label="Sentiment Result", lines=2)
-    sentiment_button.click(
-        fn=analyze_sentiment, inputs=sentiment_input, outputs=sentiment_output
-    )
-    with gr.Tab("Full Analysis"):
-        full_input = gr.Textbox(
-            label="Article Text",
-            placeholder="Paste your article here...",
-            lines=8,
-        )
-    full_button = gr.Button("Run Full Analysis")
-    full_output = gr.Textbox(label="Combined Results", lines=8)
-    full_button.click(
-        fn=full_analysis, inputs=full_input, outputs=full_output
-    )
+    if st.button("Summarize", key="sum_btn"):
+        with st.spinner("Generating summary..."):
+            summary_output = summarize_with_llm(summary_input)
+            st.write(summary_output)
 
-demo.launch(share=True)
+# Tab 2: Sentiment
+with tab2:
+    sentiment_input = st.text_area(
+        "Article Text",
+        placeholder="Paste your article here...",
+        height=200,
+        key="sent_in",
+    )
+    if st.button("Analyze Sentiment", key="sent_btn"):
+        with st.spinner("Analyzing sentiment..."):
+            sentiment_output = analyze_sentiment(sentiment_input)
+            st.markdown(sentiment_output)
+
+# Tab 3: Full Analysis
+with tab3:
+    full_input = st.text_area(
+        "Article Text",
+        placeholder="Paste your article here...",
+        height=200,
+        key="full_in",
+    )
+    if st.button("Run Full Analysis", key="full_btn"):
+        if not full_input.strip():
+            st.warning("Please enter text first.")
+        else:
+            with st.spinner("Running full analysis..."):
+                col1, col2 = st.columns(2)
+                with col1:
+                    st.subheader("Sentiment")
+                    st.markdown(analyze_sentiment(full_input))
+                with col2:
+                    st.subheader("Summary")
+                    st.write(summarize_with_llm(full_input))
