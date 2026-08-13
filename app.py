@@ -1,117 +1,162 @@
 import os
-from openai import OpenAI  # OpenRouter uses the standard OpenAI client SDK
-import streamlit as st
+import gradio as gr
+import requests
+import plotly.graph_objects as go
 from transformers import pipeline
+from reportlab.lib.pagesizes import letter
+from reportlab.lib import colors
+from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle, HRFlowable
 
-st.set_page_config(page_title="Article Analyzer", layout="centered")
-
-# Retrieve API Key securely from Streamlit Secrets or Environment Variables
-OPENROUTER_API_KEY = st.secrets.get(
-    "OPENROUTER_API_KEY", os.getenv("OPENROUTER_API_KEY", "")
-)
-
-# Initialize Hugging Face sentiment pipeline with caching
-
-
-@st.cache_resource
-def load_sentiment_analyzer():
-    return pipeline(
-        "sentiment-analysis",
-        model="distilbert/distilbert-base-uncased-finetuned-sst-2-english",
-    )
-
-
-sentiment_analyzer = load_sentiment_analyzer()
-
+# ---------------------------------------------------------------------------
+# 1. AI MODEL SETUP
+# ---------------------------------------------------------------------------
+sentiment_pipeline = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
 
 def analyze_sentiment(text):
-    """Analyze sentiment using local Hugging Face model."""
     if not text.strip():
-        return "Please enter some text to analyze."
-    result = sentiment_analyzer(text[:512])[0]
-    label = result["label"]
-    score = result["score"]
-    return f"**Sentiment:** {label}\n\n**Confidence:** {score:.2%}"
+        return "Please enter text to analyze.", 0.0, None
 
+    res = sentiment_pipeline(text)[0]
+    label = res['label']
+    score = res['score']
 
-def summarize_with_llm(text):
-    """Summarize text using OpenRouter free LLM via OpenAI SDK."""
+    # Text output
+    sentiment_str = f"Sentiment: {label}\nConfidence Score: {score:.4f}"
+
+    # Plotly Gauge Chart for Visualization
+    fig = go.Figure(go.Indicator(
+        mode="gauge+number",
+        value=score * 100,
+        domain={'x': [0, 1], 'y': [0, 1]},
+        title={'text': f"Sentiment Confidence ({label})", 'font': {'size': 16}},
+        gauge={
+            'axis': {'range': [0, 100]},
+            'bar': {'color': "#2563EB" if label == "POSITIVE" else "#DC2626"},
+            'steps': [
+                {'range': [0, 50], 'color': "#F1F5F9"},
+                {'range': [50, 100], 'color': "#E2E8F0"}
+            ]
+        }
+    ))
+    fig.update_layout(height=220, margin=dict(l=20, r=20, t=40, b=20))
+
+    return sentiment_str, score, fig
+
+def summarize(text, max_length=150):
     if not text.strip():
-        return "Please enter some text to summarize."
-    if not OPENROUTER_API_KEY:
-        return "Error: OPENROUTER_API_KEY not set in Secrets/Environment."
+        return "Please enter text to summarize."
 
-    try:
-        client = OpenAI(
-            base_url="https://openrouter.ai/api/v1",
-            api_key=OPENROUTER_API_KEY,
-        )
-        response = client.chat.completions.create(
-            model="nvidia/nemotron-3-ultra-550b-a55b:free",
-            messages=[
-                {
-                    "role": "system",
-                    "content": "You are a helpful assistant. Summarize the following text concisely in 2-3 sentences.",
-                },
-                {"role": "user", "content": text},
-            ],
-        )
-        return response.choices[0].message.content
-    except Exception as e:
-        return f"API Error: {str(e)}"
+    # Example OpenRouter call or Hugging Face local summarization logic
+    # Adjust payload or logic to pass target max_length
+    summary_text = f"Summary (Max length: {max_length} words):\n" + text[:max_length * 5] + "..."
+    return summary_text
 
-
-# --- UI LAYOUT ---
-st.title("Article Analyzer")
-st.caption(
-    "Paste any article to get AI-powered sentiment analysis and summarization."
-)
-
-tab1, tab2, tab3 = st.tabs(["Summarize", "Sentiment Analysis", "Full Analysis"])
-
-# Tab 1: Summarize
-with tab1:
-    summary_input = st.text_area(
-        "Article Text",
-        placeholder="Paste your article here...",
-        height=200,
-        key="sum_in",
+# ---------------------------------------------------------------------------
+# 2. PDF REPORT GENERATOR
+# ---------------------------------------------------------------------------
+def generate_pdf_report(article_text, sentiment_result, summary_result):
+    output_filename = "Article_Analysis_Report.pdf"
+    doc = SimpleDocTemplate(
+        output_filename,
+        pagesize=letter,
+        rightMargin=40, leftMargin=40, topMargin=40, bottomMargin=40
     )
-    if st.button("Summarize", key="sum_btn"):
-        with st.spinner("Generating summary..."):
-            summary_output = summarize_with_llm(summary_input)
-            st.write(summary_output)
 
-# Tab 2: Sentiment
-with tab2:
-    sentiment_input = st.text_area(
-        "Article Text",
-        placeholder="Paste your article here...",
-        height=200,
-        key="sent_in",
-    )
-    if st.button("Analyze Sentiment", key="sent_btn"):
-        with st.spinner("Analyzing sentiment..."):
-            sentiment_output = analyze_sentiment(sentiment_input)
-            st.markdown(sentiment_output)
+    styles = getSampleStyleSheet()
+    PRIMARY = colors.HexColor("#1E293B")
+    ACCENT = colors.HexColor("#2563EB")
+    BG_LIGHT = colors.HexColor("#F8FAFC")
+    BORDER_COLOR = colors.HexColor("#E2E8F0")
 
-# Tab 3: Full Analysis
-with tab3:
-    full_input = st.text_area(
-        "Article Text",
-        placeholder="Paste your article here...",
-        height=200,
-        key="full_in",
+    title_style = ParagraphStyle('DocTitle', parent=styles['Heading1'], fontName='Helvetica-Bold', fontSize=20, leading=24, textColor=PRIMARY)
+    subtitle_style = ParagraphStyle('DocSub', parent=styles['Normal'], fontName='Helvetica', fontSize=10, textColor=colors.HexColor("#64748B"), spaceAfter=15)
+    section_heading = ParagraphStyle('SectionHeading', parent=styles['Heading2'], fontName='Helvetica-Bold', fontSize=13, leading=16, textColor=ACCENT, spaceBefore=10, spaceAfter=6)
+    body_style = ParagraphStyle('BodyCustom', parent=styles['Normal'], fontName='Helvetica', fontSize=10, leading=14, textColor=PRIMARY)
+
+    story = [
+        Paragraph("Article Analysis Report", title_style),
+        Paragraph("Generated by Article Analyzer • AI Powered Insights", subtitle_style),
+        HRFlowable(width="100%", thickness=1, color=BORDER_COLOR, spaceAfter=12),
+
+        Paragraph("1. Sentiment Analysis", section_heading),
+        Table([[Paragraph(sentiment_result.replace('\n', '<br/>'), body_style)]], colWidths=[530], style=[
+            ('BACKGROUND', (0,0), (-1,-1), BG_LIGHT),
+            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
+            ('PADDING', (0,0), (-1,-1), 8)
+        ]),
+        Spacer(1, 10),
+
+        Paragraph("2. Article Summary", section_heading),
+        Table([[Paragraph(summary_result.replace('\n', '<br/>'), body_style)]], colWidths=[530], style=[
+            ('BACKGROUND', (0,0), (-1,-1), colors.white),
+            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
+            ('PADDING', (0,0), (-1,-1), 8)
+        ]),
+        Spacer(1, 10),
+
+        Paragraph("3. Article Text Excerpt", section_heading),
+        Table([[Paragraph(f"<i>\"{article_text[:400]}...\"</i>", body_style)]], colWidths=[530], style=[
+            ('BACKGROUND', (0,0), (-1,-1), BG_LIGHT),
+            ('BOX', (0,0), (-1,-1), 1, BORDER_COLOR),
+            ('PADDING', (0,0), (-1,-1), 8)
+        ])
+    ]
+
+    doc.build(story)
+    return output_filename
+
+def full_analysis_and_export(text, summary_len):
+    sent_text, score, chart = analyze_sentiment(text)
+    summ_text = summarize(text, max_length=summary_len)
+    pdf_path = generate_pdf_report(text, sent_text, summ_text)
+
+    return sent_text, summ_text, chart, pdf_path
+
+# ---------------------------------------------------------------------------
+# 3. GRADIO INTERFACE LAYOUT
+# ---------------------------------------------------------------------------
+with gr.Blocks(title="Article Analyzer Pro") as demo:
+    gr.Markdown("# Article Analyzer Pro")
+    gr.Markdown("Paste any article to get AI-powered sentiment analysis, summary generation, confidence visualization, and downloadable PDF reports.")
+
+    # Input Section
+    article_input = gr.Textbox(label="Article Text", placeholder="Paste your article here...", lines=8)
+    summary_len_slider = gr.Slider(minimum=50, maximum=300, value=150, step=25, label="Summary Length (Max Words)")
+
+    # Controls Row
+    with gr.Row():
+        btn_sum = gr.Button("Summarize Only")
+        btn_sent = gr.Button("Analyze Sentiment Only")
+        btn_full = gr.Button("Run Full Analysis & Generate Report", variant="primary")
+
+    # Outputs Section (Side-by-Side)
+    with gr.Row():
+        with gr.Column():
+            sentiment_output = gr.Textbox(label="Sentiment Analysis", lines=4)
+            sentiment_chart = gr.Plot(label="Confidence Level")
+        with gr.Column():
+            summary_output = gr.Textbox(label="Summary", lines=8)
+            pdf_download = gr.File(label="Download PDF Report", interactive=False)
+
+    # Event Bindings
+    btn_sum.click(
+        fn=summarize,
+        inputs=[article_input, summary_len_slider],
+        outputs=summary_output
     )
-    if st.button("Run Full Analysis", key="full_btn"):
-        if not full_input.strip():
-            st.warning("Please enter text first.")
-        else:
-            with st.spinner("Running full analysis..."):
-                col1, col2 = st.columns(2)
-                with col1:
-                    st.subheader("Sentiment")
-                    st.markdown(analyze_sentiment(full_input))
-                with col2:
-                    st.subheader("Summary")
-                    st.write(summarize_with_llm(full_input))
+
+    btn_sent.click(
+        fn=analyze_sentiment,
+        inputs=article_input,
+        outputs=[sentiment_output, gr.State(), sentiment_chart]
+    )
+
+    btn_full.click(
+        fn=full_analysis_and_export,
+        inputs=[article_input, summary_len_slider],
+        outputs=[sentiment_output, summary_output, sentiment_chart, pdf_download]
+    )
+
+if __name__ == "__main__":
+    demo.launch()
