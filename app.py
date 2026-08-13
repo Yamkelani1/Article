@@ -13,12 +13,14 @@ st.set_page_config(page_title="Article Analyzer Pro", layout="wide")
 st.title("Article Analyzer Pro")
 st.write("Paste any article to get AI-powered sentiment analysis, summary generation, confidence visualization, and downloadable PDF reports.")
 
-# Load Model
+# Load AI Models
 @st.cache_resource
-def load_sentiment_model():
-    return pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+def load_models():
+    sentiment_model = pipeline("sentiment-analysis", model="distilbert-base-uncased-finetuned-sst-2-english")
+    summarizer_model = pipeline("summarization", model="sshleifer/distilbart-cnn-12-6")
+    return sentiment_model, summarizer_model
 
-sentiment_pipeline = load_sentiment_model()
+sentiment_pipeline, summarizer_pipeline = load_models()
 
 # Helper: PDF Generator
 def generate_pdf_report(article_text, sentiment_result, summary_result):
@@ -54,50 +56,57 @@ def generate_pdf_report(article_text, sentiment_result, summary_result):
 
 # UI Inputs
 article_input = st.text_area("Article Text", placeholder="Paste your article here...", height=200)
-summary_len = st.slider("Summary Length (Max Words)", min_value=50, max_value=300, value=150, step=25)
+summary_len = st.slider("Summary Length (Max Words)", min_value=30, max_value=200, value=80, step=10)
 
 if st.button("Analyze Article", type="primary"):
     if not article_input.strip():
         st.warning("Please enter text to analyze.")
     else:
-        # Sentiment
-        res = sentiment_pipeline(article_input)[0]
-        label = res['label']
-        score = res['score']
-        sentiment_text = f"Sentiment: {label}\nConfidence Score: {score:.4f}"
+        with st.spinner("Analyzing sentiment and generating summary..."):
+            # Sentiment Analysis
+            res = sentiment_pipeline(article_input[:512])[0]
+            label = res['label']
+            score = res['score']
+            sentiment_text = f"Sentiment: {label}\nConfidence Score: {score:.4f}"
 
-        # Gauge Chart
-        fig = go.Figure(go.Indicator(
-            mode="gauge+number",
-            value=score * 100,
-            title={'text': f"Sentiment Confidence ({label})"},
-            gauge={
-                'axis': {'range': [0, 100]},
-                'bar': {'color': "#2563EB" if label == "POSITIVE" else "#DC2626"},
-                'steps': [{'range': [0, 50], 'color': "#F1F5F9"}, {'range': [50, 100], 'color': "#E2E8F0"}]
-            }
-        ))
-        fig.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
+            # Gauge Chart
+            fig = go.Figure(go.Indicator(
+                mode="gauge+number",
+                value=score * 100,
+                title={'text': f"Sentiment Confidence ({label})"},
+                gauge={
+                    'axis': {'range': [0, 100]},
+                    'bar': {'color': "#2563EB" if label == "POSITIVE" else "#DC2626"},
+                    'steps': [{'range': [0, 50], 'color': "#F1F5F9"}, {'range': [50, 100], 'color': "#E2E8F0"}]
+                }
+            ))
+            fig.update_layout(height=250, margin=dict(l=20, r=20, t=40, b=20))
 
-        # Summary
-        summary_text = f"Summary (Max target: {summary_len} words):\n" + article_input[:summary_len * 5] + "..."
+            # Genuine AI Summarization
+            summary_out = summarizer_pipeline(
+                article_input,
+                max_length=summary_len,
+                min_length=max(10, summary_len // 2),
+                do_sample=False
+            )
+            summary_text = summary_out[0]['summary_text']
 
-        # Generate PDF
-        pdf_path = generate_pdf_report(article_input, sentiment_text, summary_text)
+            # Generate PDF
+            pdf_path = generate_pdf_report(article_input, sentiment_text, summary_text)
 
-        # Display Results
-        col1, col2 = st.columns(2)
-        with col1:
-            st.subheader("Sentiment Analysis")
-            st.info(sentiment_text)
-            st.plotly_chart(fig, use_container_width=True)
-        with col2:
-            st.subheader("Summary")
-            st.write(summary_text)
-            with open(pdf_path, "rb") as file:
-                st.download_button(
-                    label="📥 Download PDF Report",
-                    data=file,
-                    file_name="Article_Analysis_Report.pdf",
-                    mime="application/pdf"
-                )
+            # Display Results
+            col1, col2 = st.columns(2)
+            with col1:
+                st.subheader("Sentiment Analysis")
+                st.info(sentiment_text)
+                st.plotly_chart(fig, use_container_width=True)
+            with col2:
+                st.subheader("Summary")
+                st.success(summary_text)
+                with open(pdf_path, "rb") as file:
+                    st.download_button(
+                        label="📥 Download PDF Report",
+                        data=file,
+                        file_name="Article_Analysis_Report.pdf",
+                        mime="application/pdf"
+                    )
