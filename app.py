@@ -2,6 +2,7 @@ import io
 import json
 import requests
 import streamlit as st
+import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
@@ -61,11 +62,12 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         """
     else: # mode == "youtube"
         prompt = f"""
-        Analyze these YouTube comments and provide a structured JSON response with:
+        Analyze these YouTube comments and categorize each comment individually.
+        Provide a structured JSON response with:
         1. "overall_sentiment": "Positive", "Negative", or "Neutral"
-        2. "summary": A brief executive summary of audience feedback and general reaction.
-        3. "key_points": A list of 3 main recurring themes or talking points from viewers.
-        4. "categorized_comments": A list of objects with keys: "author", "text", "likes", and "sentiment" ("Positive", "Negative", or "Neutral").
+        2. "summary": An executive summary highlighting key takeaways, main praise, and major complaints/pain points.
+        3. "key_points": A list of 3 to 5 main recurring themes or talking points from viewers.
+        4. "categorized_comments": A list of objects where EVERY input comment is included with its original "author", "text", "likes", and an assigned "sentiment" ("Positive", "Negative", or "Neutral").
 
         Comments Data:
         {json.dumps(content_data)}
@@ -207,9 +209,47 @@ if st.button("Run Analysis"):
                 for point in ai_output.get("key_points", []):
                     st.markdown(f"* {point}")
 
-                # PDF Download
+                # Download PDF
                 pdf_bytes = generate_pdf("YouTube Audience Analysis Report", ai_output.get("summary", ""), ai_output.get("key_points", []))
                 st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_report.pdf", mime="application/pdf")
+
+                # ==========================================
+                # ADDED FUNCTIONALITY: INDIVIDUAL COMMENTS BREAKDOWN
+                # ==========================================
+                st.markdown("---")
+                st.subheader("💬 Public Comments & Sentiment Breakdown")
+
+                cat_comments = ai_output.get("categorized_comments", comments)
+                df = pd.DataFrame(cat_comments)
+
+                if "sentiment" not in df.columns:
+                    df["sentiment"] = "Neutral"
+
+                tab_all, tab_pos, tab_neu, tab_neg = st.tabs(["All Comments", "Positive 😀", "Neutral 😐", "Negative 😡"])
+
+                with tab_all:
+                    st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
+
+                with tab_pos:
+                    pos_df = df[df["sentiment"].str.lower() == "positive"]
+                    if not pos_df.empty:
+                        st.dataframe(pos_df[["author", "text", "likes"]], use_container_width=True)
+                    else:
+                        st.info("No positive comments detected.")
+
+                with tab_neu:
+                    neu_df = df[df["sentiment"].str.lower() == "neutral"]
+                    if not neu_df.empty:
+                        st.dataframe(neu_df[["author", "text", "likes"]], use_container_width=True)
+                    else:
+                        st.info("No neutral comments detected.")
+
+                with tab_neg:
+                    neg_df = df[df["sentiment"].str.lower() == "negative"]
+                    if not neg_df.empty:
+                        st.dataframe(neg_df[["author", "text", "likes"]], use_container_width=True)
+                    else:
+                        st.info("No negative comments detected.")
 
         except Exception as e:
             st.error(f"Error executing analysis: {e}")
