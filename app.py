@@ -132,37 +132,21 @@ if st.button("Run Analysis"):
     with st.spinner("Processing analysis via OpenRouter AI..."):
         try:
             if analysis_mode == "Paste Raw Article Text":
-                    if not article_text.strip():
-                        st.warning("Please paste some text first.")
-                        st.stop()
+                if not article_text.strip():
+                    st.warning("Please paste some text first.")
+                    st.stop()
 
-                    ai_output = analyze_with_openrouter(article_text, "text", openrouter_api_key)
-                    sentiment = ai_output.get("overall_sentiment", "Neutral")
-                    polarity = ai_output.get("polarity_score", 0.0)
-                    subjectivity = ai_output.get("subjectivity_score", 0.0)
-                    summary = ai_output.get("executive_summary", "No summary available.")
+                ai_output = analyze_with_openrouter(article_text, mode="text", api_key=openrouter_api_key)
+                sentiment = ai_output.get("overall_sentiment", "Neutral")
 
-                    st.subheader("📊 Sentiment Metrics")
-                    col1, col2, col3 = st.columns(3)
-                    col1.metric("Overall Sentiment", sentiment)
-                    col2.metric("Polarity Score", f"{polarity:.2f}")
-                    col3.metric("Subjectivity Score", f"{subjectivity:.2f}")
+            else:
+                # This else handles "Analyze YouTube Video Link"
+                # Make sure 'else:' aligns exactly with 'if analysis_mode ==' above
+                if not youtube_url.strip():
+                    st.warning("Please enter a valid YouTube URL first.")
+                    st.stop()
 
-                    st.markdown("---")
-                    st.subheader("📝 Article Summary")
-                    st.info(summary)
-
-                    pdf_extra = [
-                        f"<b>Overall Sentiment:</b> {sentiment}",
-                        f"<b>Polarity Score:</b> {polarity:.2f}",
-                        f"<b>Subjectivity Score:</b> {subjectivity:.2f}"
-                    ]
-                    pdf_data = generate_pdf("Article Analysis Report", summary, pdf_extra)
-
-                else:
-                    if not youtube_url.strip():
-                        st.warning("Please enter a valid YouTube video URL.")
-                        st.stop()
+                    # Your YouTube processing logic here...
 
                     comments = fetch_youtube_comments(youtube_url, max_comments)
                     if not comments:
