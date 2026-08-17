@@ -1,11 +1,12 @@
 import io
 import json
+import re
 import requests
 import streamlit as st
 import pandas as pd
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
-from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer
+from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
 from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from youtube_comment_downloader import YoutubeCommentDownloader
 
@@ -18,7 +19,7 @@ st.set_page_config(
     layout="wide"
 )
 
-# Load API Key from Streamlit Secrets or Environment in the background
+# Load API Key from Streamlit Secrets or Environment
 openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 if not openrouter_api_key:
     import os
@@ -27,6 +28,14 @@ if not openrouter_api_key:
 # ==========================================
 # HELPER FUNCTIONS
 # ==========================================
+def clean_text_for_pdf(text):
+    """Remove emojis and non-standard ASCII characters that crash ReportLab PDF fonts."""
+    if not isinstance(text, str):
+        text = str(text)
+    # Strip emojis / non-latin characters for PDF safety
+    return re.sub(r'[^\x00-\x7F]+', '', text).strip()
+
+
 def fetch_youtube_comments(video_url, max_comments=30):
     """Fetch public comments from a YouTube video URL."""
     downloader = YoutubeCommentDownloader()
@@ -95,31 +104,80 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
     return json.loads(response_text)
 
 
-def generate_pdf(title, summary, extra_info=None):
-    """Generate a downloadable PDF report."""
+def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=None):
+    """Generate downloadable PDF report containing summary, points, and comment breakdown table."""
     buffer = io.BytesIO()
-    doc = SimpleDocTemplate(buffer, pagesize=letter)
+    doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
 
     title_style = ParagraphStyle('TitleStyle', parent=styles['Heading1'], fontSize=18, textColor=colors.HexColor('#1E3A8A'))
-    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=14, textColor=colors.HexColor('#2563EB'))
+    heading_style = ParagraphStyle('HeadingStyle', parent=styles['Heading2'], fontSize=13, textColor=colors.HexColor('#2563EB'))
     body_style = styles['Normal']
+    table_cell_style = ParagraphStyle('TableCell', parent=styles['Normal'], fontSize=8, leading=10)
+    table_header_style = ParagraphStyle('TableHeader', parent=styles['Normal'], fontSize=9, leading=11, fontName='Helvetica-Bold', textColor=colors.white)
 
     elements = [
-        Paragraph(title, title_style),
-        Spacer(1, 12),
+        Paragraph(clean_text_for_pdf(title), title_style),
+        Spacer(1, 10)
+    ]
+
+    if sentiment:
+        sentiment_style = ParagraphStyle('SentimentStyle', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold')
+        elements.append(Paragraph(f"<b>Overall Audience Sentiment:</b> {clean_text_for_pdf(sentiment)}", sentiment_style))
+        elements.append(Spacer(1, 10))
+
+    elements.extend([
         Paragraph("Executive Summary", heading_style),
         Spacer(1, 6),
-        Paragraph(summary, body_style),
-        Spacer(1, 12)
-    ]
+        Paragraph(clean_text_for_pdf(summary), body_style),
+        Spacer(1, 10)
+    ])
 
     if extra_info:
         elements.append(Paragraph("Key Takeaways / Highlights", heading_style))
         elements.append(Spacer(1, 6))
         for item in extra_info:
-            elements.append(Paragraph(f"• {item}", body_style))
+            elements.append(Paragraph(f"• {clean_text_for_pdf(item)}", body_style))
             elements.append(Spacer(1, 4))
+        elements.append(Spacer(1, 12))
+
+    # Add Comments Table to PDF
+    if comments_data:
+        elements.append(Paragraph("Public Comments & Sentiment Breakdown", heading_style))
+        elements.append(Spacer(1, 8))
+
+        table_data = [[
+            Paragraph("Author", table_header_style),
+            Paragraph("Comment Text", table_header_style),
+            Paragraph("Likes", table_header_style),
+            Paragraph("Sentiment", table_header_style)
+        ]]
+
+        for item in comments_data:
+            clean_author = clean_text_for_pdf(item.get("author", ""))
+            clean_comment = clean_text_for_pdf(item.get("text", ""))
+            clean_likes = str(item.get("likes", 0))
+            clean_sent = clean_text_for_pdf(item.get("sentiment", "Neutral"))
+
+            table_data.append([
+                Paragraph(clean_author if clean_author else "Anonymous", table_cell_style),
+                Paragraph(clean_comment if clean_comment else "[Emoji/Media]", table_cell_style),
+                Paragraph(clean_likes, table_cell_style),
+                Paragraph(clean_sent, table_cell_style)
+            ])
+
+        pdf_table = Table(table_data, colWidths=[100, 280, 40, 60], repeatRows=1)
+        pdf_table.setStyle(TableStyle([
+            ('BACKGROUND', (0, 0), (-1, 0), colors.HexColor('#1E3A8A')),
+            ('ALIGN', (0, 0), (-1, -1), 'LEFT'),
+            ('VALIGN', (0, 0), (-1, -1), 'TOP'),
+            ('GRID', (0, 0), (-1, -1), 0.5, colors.HexColor('#CBD5E1')),
+            ('ROWBACKGROUNDS', (0, 1), (-1, -1), [colors.white, colors.HexColor('#F8FAFC')]),
+            ('TOPPADDING', (0, 0), (-1, -1), 4),
+            ('BOTTOMPADDING', (0, 0), (-1, -1), 4),
+        ]))
+
+        elements.append(pdf_table)
 
     doc.build(elements)
     buffer.seek(0)
@@ -132,7 +190,6 @@ def generate_pdf(title, summary, extra_info=None):
 st.title("📰 Article & Social Sentiment Analyzer")
 st.markdown("Analyze raw article text or YouTube video audience feedback seamlessly using AI.")
 
-# Mode Selector
 analysis_mode = st.radio(
     "Select Input Mode:",
     ("Paste Raw Article Text", "Analyze YouTube Video Link"),
@@ -144,7 +201,6 @@ if analysis_mode == "Paste Raw Article Text":
 else:
     youtube_url = st.text_input("Enter YouTube Video URL")
 
-# Action Button
 if st.button("Run Analysis"):
     if not openrouter_api_key:
         st.error("API Key missing from Secrets. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
@@ -176,8 +232,12 @@ if st.button("Run Analysis"):
                 for point in ai_output.get("key_points", []):
                     st.markdown(f"* {point}")
 
-                # PDF Download
-                pdf_bytes = generate_pdf("Article Analysis Report", ai_output.get("summary", ""), ai_output.get("key_points", []))
+                pdf_bytes = generate_pdf(
+                    title="Article Analysis Report",
+                    summary=ai_output.get("summary", ""),
+                    extra_info=ai_output.get("key_points", []),
+                    sentiment=sentiment
+                )
                 st.download_button("📥 Download PDF Report", pdf_bytes, file_name="article_report.pdf", mime="application/pdf")
 
             else:
@@ -209,17 +269,21 @@ if st.button("Run Analysis"):
                 for point in ai_output.get("key_points", []):
                     st.markdown(f"* {point}")
 
-                # Download PDF
-                pdf_bytes = generate_pdf("YouTube Audience Analysis Report", ai_output.get("summary", ""), ai_output.get("key_points", []))
+                cat_comments = ai_output.get("categorized_comments", comments)
+
+                # Generate PDF with full comments table safely sanitized
+                pdf_bytes = generate_pdf(
+                    title="YouTube Audience Analysis Report",
+                    summary=ai_output.get("summary", ""),
+                    extra_info=ai_output.get("key_points", []),
+                    sentiment=sentiment,
+                    comments_data=cat_comments
+                )
                 st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_report.pdf", mime="application/pdf")
 
-                # ==========================================
-                # ADDED FUNCTIONALITY: INDIVIDUAL COMMENTS BREAKDOWN
-                # ==========================================
                 st.markdown("---")
                 st.subheader("💬 Public Comments & Sentiment Breakdown")
 
-                cat_comments = ai_output.get("categorized_comments", comments)
                 df = pd.DataFrame(cat_comments)
 
                 if "sentiment" not in df.columns:
