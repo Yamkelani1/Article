@@ -128,9 +128,10 @@ if st.button("Run Analysis"):
     if not openrouter_api_key:
         st.error("API Key missing from Secrets.")
         st.stop()
-        with st.spinner("Processing analysis via OpenRouter AI..."):
-            try:
-                if analysis_mode == "Paste Raw Article Text":
+
+    with st.spinner("Processing analysis via OpenRouter AI..."):
+        try:
+            if analysis_mode == "Paste Raw Article Text":
                     if not article_text.strip():
                         st.warning("Please paste some text first.")
                         st.stop()
