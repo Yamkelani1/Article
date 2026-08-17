@@ -80,7 +80,7 @@ def analyze_with_openrouter(content_data, mode, api_key):
         """
 
     payload = {
-        "model": "meta-llama/llama-3.2-3b-instruct:free",
+        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
