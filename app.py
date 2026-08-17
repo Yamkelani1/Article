@@ -16,9 +16,13 @@ st.set_page_config(page_title="Article & Social Sentiment Analyzer", layout="wid
 st.title("Article & Public Link Sentiment Analyzer")
 st.write("Analyze pasted article text or public YouTube video comments using AI-powered sentiment analysis and executive reporting.")
 
-# Sidebar Configuration
-st.sidebar.header("Configuration")
-openrouter_api_key = st.sidebar.text_input("OpenRouter API Key", type="password", help="Enter your OpenRouter API key to power AI sentiment analysis.")
+# Load API Key from background secrets or .env file
+openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
+
+if not openrouter_api_key:
+    # Optional fallback for local development if python-dotenv is installed
+    import os
+    openrouter_api_key = os.getenv("OPENROUTER_API_KEY", "")
 
 # Input Mode Switcher
 analysis_mode = st.radio(
@@ -122,8 +126,8 @@ def generate_pdf(title, summary, extra_info=None):
 
 if st.button("Run Analysis"):
     if not openrouter_api_key:
-        st.warning("Please enter your OpenRouter API Key in the sidebar.")
-    else:
+        st.error("API Key missing from Secrets.")
+        st.stop()
         with st.spinner("Processing analysis via OpenRouter AI..."):
             try:
                 if analysis_mode == "Paste Raw Article Text":
