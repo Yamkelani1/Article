@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from youtube_comment_downloader import YoutubeCommentDownloader
 
 # ==========================================
-# PAGE CONFIGURATION & CUSTOM STYLING
+# PAGE CONFIGURATION & STYLING FIXES
 # ==========================================
 st.set_page_config(
     page_title="YouTube Sentiment Dashboard",
@@ -19,93 +19,105 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for high-impact colors, modern fonts, and card styling
+# Custom CSS ensuring crisp contrast, explicit text colors, and visible radio buttons
 st.markdown("""
 <style>
-    /* Global Page Styling */
+    /* Global Page Body & Background */
     .stApp {
-        background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+        background-color: #F8FAFC !important;
+        color: #0F172A !important;
     }
     
     /* Hero Header Styling */
     .hero-title {
-        font-size: 3.5rem !important;
-        font-weight: 900 !important;
+        font-size: 3rem !important;
+        font-weight: 800 !important;
         text-align: center;
-        background: linear-gradient(90deg, #2563EB 0%, #7C3AED 50%, #DB2777 100%);
-        -webkit-background-clip: text;
-        -webkit-text-fill-color: transparent;
-        margin-top: -1rem;
+        color: #1E3A8A !important;
+        margin-top: -0.5rem;
         margin-bottom: 0.5rem;
-        letter-spacing: -0.02em;
     }
     
     .hero-subtitle {
         text-align: center;
-        color: #475569;
-        font-size: 1.3rem !important;
+        color: #475569 !important;
+        font-size: 1.15rem !important;
         font-weight: 500;
         margin-bottom: 2rem;
-        max-width: 800px;
-        margin-left: auto;
-        margin-right: auto;
+    }
+
+    /* Force Radio Button Text Visibility */
+    div[data-testid="stRadio"] label {
+        color: #0F172A !important;
+        font-weight: 600 !important;
+        font-size: 1rem !important;
+    }
+    div[data-testid="stRadio"] div[role="radiogroup"] {
+        background-color: #FFFFFF !important;
+        padding: 0.5rem 1rem !important;
+        border-radius: 0.5rem !important;
+        border: 1px solid #CBD5E1 !important;
+    }
+
+    /* Input Box Contrast Fix */
+    div[data-baseweb="input"] input, div[data-baseweb="textarea"] textarea {
+        background-color: #FFFFFF !important;
+        color: #0F172A !important;
+        border: 1px solid #CBD5E1 !important;
+        border-radius: 0.5rem !important;
+        font-size: 1rem !important;
+    }
+    div[data-baseweb="input"] input::placeholder, div[data-baseweb="textarea"] textarea::placeholder {
+        color: #94A3B8 !important;
     }
 
     /* Metric Card Styling */
     div[data-testid="stMetric"] {
-        background: #FFFFFF;
-        border: 1px solid #E2E8F0;
-        padding: 1.25rem;
-        border-radius: 1rem;
-        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        background: #FFFFFF !important;
+        border: 1px solid #E2E8F0 !important;
+        padding: 1.25rem !important;
+        border-radius: 0.75rem !important;
+        box-shadow: 0 1px 3px rgba(0, 0, 0, 0.05) !important;
         text-align: center;
     }
-    
     div[data-testid="stMetricLabel"] {
-        font-size: 1rem !important;
-        color: #64748B !important;
+        font-size: 0.95rem !important;
+        color: #475569 !important;
         font-weight: 600 !important;
     }
-    
     div[data-testid="stMetricValue"] {
-        font-size: 2.2rem !important;
-        color: #1E293B !important;
+        font-size: 2rem !important;
+        color: #1E3A8A !important;
         font-weight: 800 !important;
     }
 
-    /* Comment Quote Cards */
+    /* Qualitative Cards */
     .quote-card {
         background-color: #FFFFFF;
-        border-left: 5px solid #7C3AED;
-        padding: 1.2rem;
-        border-radius: 0.75rem;
-        margin-bottom: 1rem;
-        color: #334155;
-        font-size: 1rem;
-        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+        border-left: 4px solid #2563EB;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.75rem;
+        color: #1E293B;
+        font-size: 0.95rem;
+        border-top: 1px solid #E2E8F0;
+        border-right: 1px solid #E2E8F0;
+        border-bottom: 1px solid #E2E8F0;
     }
     
-    /* AI Report Card Box */
+    /* Report Container */
     .report-card {
-        background: linear-gradient(135deg, #F5F3FF 0%, #EEF2FF 100%);
-        border: 1px solid #C7D2FE;
-        border-radius: 1rem;
-        padding: 2rem;
+        background-color: #EFF6FF;
+        border: 1px solid #BFDBFE;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
         margin-top: 1.5rem;
-        margin-bottom: 2rem;
-        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
-    }
-    
-    .report-title {
-        color: #3730A3;
-        font-size: 1.6rem;
-        font-weight: 800;
-        margin-bottom: 1rem;
+        margin-bottom: 1.5rem;
     }
 </style>
 """, unsafe_allow_html=True)
 
-# Load API Key from Streamlit Secrets or Environment
+# API Key Retrieval
 openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
 if not openrouter_api_key:
     import os
@@ -115,14 +127,13 @@ if not openrouter_api_key:
 # HELPER FUNCTIONS
 # ==========================================
 def clean_text_for_pdf(text):
-    """Remove emojis and non-standard ASCII characters that crash ReportLab PDF fonts."""
     if not isinstance(text, str):
         text = str(text)
     return re.sub(r'[^\x00-\x7F]+', '', text).strip()
 
 
 def fetch_youtube_comments(video_url, max_comments=30):
-    """Fetch public comments from a YouTube video URL."""
+    """Fetch public comments with detailed error logging."""
     downloader = YoutubeCommentDownloader()
     comments = []
     try:
@@ -136,12 +147,12 @@ def fetch_youtube_comments(video_url, max_comments=30):
                 "likes": comment.get("votes", 0)
             })
     except Exception as e:
-        st.error(f"Error fetching YouTube comments: {e}")
+        st.error(f"Failed to fetch YouTube comments: {str(e)}")
+        return None
     return comments
 
 
 def analyze_with_openrouter(content_data, mode="text", api_key=""):
-    """Send text or comments to OpenRouter for AI sentiment analysis and qualitative extraction."""
     if mode == "text":
         prompt = f"""
         Analyze the following article text and provide a structured JSON response with:
@@ -154,7 +165,7 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         
         Respond STRICTLY with valid JSON.
         """
-    else: # mode == "youtube"
+    else:
         prompt = f"""
         Analyze these YouTube comments and categorize each comment individually while extracting qualitative themes.
         Provide a structured JSON response with:
@@ -194,7 +205,6 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
 
 
 def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=None):
-    """Generate downloadable PDF report containing summary, points, and comment breakdown table."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
     styles = getSampleStyleSheet()
@@ -273,163 +283,109 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
 
 
 # ==========================================
-# MAIN STREAMLIT LANDING PAGE UI
+# UI & FORM EXECUTION
 # ==========================================
 st.markdown('<div class="hero-title">YouTube Sentiment Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="hero-subtitle">Analyze YouTube video comments to understand audience sentiment and engagement patterns with AI-powered insights.</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">Analyze YouTube comments to understand audience sentiment and engagement patterns with AI.</div>', unsafe_allow_html=True)
 
-# Centered Search & Selection Controls
-col_left, col_center, col_right = st.columns([1, 6, 1])
-
-with col_center:
+# Using st.form ensures input stability and prevents premature re-renders
+with st.form("analysis_form"):
     analysis_mode = st.radio(
-        "Select Input Mode:",
+        "Select Mode:",
         ("Analyze YouTube Video Link", "Paste Raw Article Text"),
-        horizontal=True,
-        label_visibility="collapsed"
+        horizontal=True
     )
 
-    if analysis_mode == "Analyze YouTube Video Link":
-        youtube_url = st.text_input("", placeholder="🔍 Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=...)", label_visibility="collapsed")
-    else:
-        article_text = st.text_area("", placeholder="📝 Paste raw article text here...", height=200, label_visibility="collapsed")
+    youtube_url = st.text_input("YouTube Link", placeholder="https://www.youtube.com/watch?v=...")
+    article_text = st.text_area("Raw Text (if using Raw Text mode)", placeholder="Paste article text...", height=120)
 
-    btn_col1, btn_col2, btn_col3 = st.columns([2, 3, 2])
-    with btn_col2:
-        run_btn = st.button("🚀 Launch Analysis Engine", type="primary", use_container_width=True)
+    submit_button = st.form_submit_button("🚀 Run Dashboard Analysis", use_container_width=True)
 
-# ==========================================
-# ANALYSIS EXECUTION
-# ==========================================
-if run_btn:
+if submit_button:
     if not openrouter_api_key:
-        st.error("API Key missing from Secrets. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
+        st.error("API Key missing. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    with st.spinner("⚡ Fetching comments and generating AI insights..."):
-        try:
-            if analysis_mode == "Analyze YouTube Video Link":
-                if not youtube_url.strip():
-                    st.warning("Please enter a valid YouTube URL first.")
-                    st.stop()
+    if analysis_mode == "Analyze YouTube Video Link":
+        if not youtube_url.strip():
+            st.warning("Please enter a YouTube video URL.")
+            st.stop()
 
-                comments = fetch_youtube_comments(youtube_url)
-                if not comments:
-                    st.error("No comments found or couldn't fetch comments from this video.")
-                    st.stop()
+        with st.spinner("Fetching comments from YouTube..."):
+            comments = fetch_youtube_comments(youtube_url.strip())
 
+        if comments is None:
+            st.stop()
+        elif len(comments) == 0:
+            st.error("No public comments could be retrieved from this URL. Ensure comments are enabled on the video.")
+            st.stop()
+
+        with st.spinner("Analyzing comments with AI..."):
+            try:
                 ai_output = analyze_with_openrouter(comments, mode="youtube", api_key=openrouter_api_key)
-                cat_comments = ai_output.get("categorized_comments", comments)
-                df = pd.DataFrame(cat_comments)
+            except Exception as err:
+                st.error(f"AI Processing failed: {err}")
+                st.stop()
 
-                # Success Banner
-                st.success("✅ **Analysis Complete** — Video comments successfully fetched and analyzed!")
+        cat_comments = ai_output.get("categorized_comments", comments)
+        df = pd.DataFrame(cat_comments)
 
-                # Metric Cards Display
-                m1, m2, m3 = st.columns(3)
-                with m1:
-                    st.metric("Total Comments Analyzed", len(comments))
-                with m2:
-                    sentiment_val = ai_output.get("overall_sentiment", "Neutral")
-                    st.metric("Dominant Sentiment", sentiment_val)
-                with m3:
-                    total_likes = df["likes"].sum() if "likes" in df.columns else 0
-                    st.metric("Total Engagement (Likes)", total_likes)
+        st.success(f"Analysis Complete! Processed {len(comments)} comments.")
 
-                st.markdown("<br>", unsafe_allow_html=True)
+        col1, col2, col3 = st.columns(3)
+        with col1:
+            st.metric("Comments Analyzed", len(comments))
+        with col2:
+            st.metric("Dominant Sentiment", ai_output.get("overall_sentiment", "Neutral"))
+        with col3:
+            total_likes = df["likes"].sum() if "likes" in df.columns else 0
+            st.metric("Total Comment Likes", total_likes)
 
-                # Comment Categories Tabs
-                st.subheader("💬 Comment Categories")
-                tab_interesting, tab_takes, tab_questions = st.tabs([
-                    f"⭐ Most Interesting ({len(ai_output.get('most_interesting', []))})",
-                    f"🔥 Hot Takes ({len(ai_output.get('hot_takes', []))})",
-                    f"❓ Questions ({len(ai_output.get('questions', []))})"
-                ])
+        st.markdown("---")
 
-                with tab_interesting:
-                    interesting_items = ai_output.get("most_interesting", [])
-                    if interesting_items:
-                        for q in interesting_items:
-                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
-                    else:
-                        st.info("No key interesting highlights categorized.")
+        st.subheader("💬 Comment Categories")
+        tab1, tab2, tab3 = st.tabs(["⭐ Most Interesting", "🔥 Hot Takes", "❓ Questions"])
 
-                with tab_takes:
-                    hot_items = ai_output.get("hot_takes", [])
-                    if hot_items:
-                        for q in hot_items:
-                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
-                    else:
-                        st.info("No strong hot takes categorized.")
+        with tab1:
+            for item in ai_output.get("most_interesting", []):
+                st.markdown(f'<div class="quote-card">"{item}"</div>', unsafe_allow_html=True)
+        with tab2:
+            for item in ai_output.get("hot_takes", []):
+                st.markdown(f'<div class="quote-card">"{item}"</div>', unsafe_allow_html=True)
+        with tab3:
+            for item in ai_output.get("questions", []):
+                st.markdown(f'<div class="quote-card">"{item}"</div>', unsafe_allow_html=True)
 
-                with tab_questions:
-                    question_items = ai_output.get("questions", [])
-                    if question_items:
-                        for q in question_items:
-                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
-                    else:
-                        st.info("No explicit audience questions detected.")
+        st.markdown('<div class="report-card">', unsafe_allow_html=True)
+        st.subheader("🤖 AI Analysis Report")
+        st.write(ai_output.get("summary", ""))
 
-                # Styled AI Analysis Report Box
-                st.markdown("""
-                <div class="report-card">
-                    <div class="report-title">🤖 AI Analysis Report</div>
-                """, unsafe_allow_html=True)
+        st.markdown("**Key Takeaways:**")
+        for pt in ai_output.get("key_points", []):
+            st.markdown(f"* {pt}")
 
-                st.markdown("**Executive Summary:**")
-                st.write(ai_output.get("summary", ""))
+        st.markdown("**Strategic Recommendations:**")
+        for idx, rec in enumerate(ai_output.get("recommendations", []), 1):
+            st.markdown(f"{idx}. {rec}")
+        st.markdown('</div>', unsafe_allow_html=True)
 
-                st.markdown("**Key Takeaways:**")
-                for pt in ai_output.get("key_points", []):
-                    st.markdown(f"* {pt}")
+        st.subheader("📋 Public Comments Breakdown")
+        st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
 
-                rec_list = ai_output.get("recommendations", [])
-                if rec_list:
-                    st.markdown("**Strategic Recommendations:**")
-                    for idx, rec in enumerate(rec_list, 1):
-                        st.markdown(f"{idx}. {rec}")
+        pdf_bytes = generate_pdf("YouTube Audience Analysis Report", ai_output.get("summary", ""), ai_output.get("key_points", []), ai_output.get("overall_sentiment", "Neutral"), cat_comments)
+        st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
 
-                st.markdown('</div>', unsafe_allow_html=True)
+    else:
+        if not article_text.strip():
+            st.warning("Please paste article text.")
+            st.stop()
 
-                # Raw Comments Table & Export Section
-                st.subheader("📋 Public Comments Breakdown")
-                st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
+        with st.spinner("Analyzing text..."):
+            ai_output = analyze_with_openrouter(article_text, mode="text", api_key=openrouter_api_key)
 
-                pdf_bytes = generate_pdf(
-                    title="YouTube Audience Analysis Report",
-                    summary=ai_output.get("summary", ""),
-                    extra_info=ai_output.get("key_points", []),
-                    sentiment=ai_output.get("overall_sentiment", "Neutral"),
-                    comments_data=cat_comments
-                )
-                st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
+        st.subheader("Analysis Results")
+        st.info(f"Overall Sentiment: **{ai_output.get('overall_sentiment', 'Neutral')}**")
+        st.write(ai_output.get("summary", ""))
 
-            else:
-                # Raw Text Processing Mode
-                if not article_text.strip():
-                    st.warning("Please paste some text first.")
-                    st.stop()
-
-                ai_output = analyze_with_openrouter(article_text, mode="text", api_key=openrouter_api_key)
-
-                st.subheader("Analysis Results")
-                sentiment = ai_output.get("overall_sentiment", "Neutral")
-                st.info(f"Overall Sentiment: **{sentiment}**")
-
-                st.markdown("### Executive Summary")
-                st.write(ai_output.get("summary", ""))
-
-                st.markdown("### Key Takeaways")
-                for point in ai_output.get("key_points", []):
-                    st.markdown(f"* {point}")
-
-                pdf_bytes = generate_pdf(
-                    title="Article Analysis Report",
-                    summary=ai_output.get("summary", ""),
-                    extra_info=ai_output.get("key_points", []),
-                    sentiment=sentiment
-                )
-                st.download_button("📥 Download PDF Report", pdf_bytes, file_name="article_report.pdf", mime="application/pdf")
-
-        except Exception as e:
-            st.error(f"Error executing analysis: {e}")
+        pdf_bytes = generate_pdf("Article Analysis Report", ai_output.get("summary", ""), ai_output.get("key_points", []), ai_output.get("overall_sentiment", "Neutral"))
+        st.download_button("📥 Download PDF Report", pdf_bytes, file_name="article_report.pdf", mime="application/pdf")
