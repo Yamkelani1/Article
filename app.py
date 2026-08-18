@@ -11,7 +11,7 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from youtube_comment_downloader import YoutubeCommentDownloader
 
 # ==========================================
-# PAGE CONFIGURATION & STYLING
+# PAGE CONFIGURATION & CUSTOM STYLING
 # ==========================================
 st.set_page_config(
     page_title="YouTube Sentiment Dashboard",
@@ -19,40 +19,88 @@ st.set_page_config(
     layout="wide"
 )
 
-# Custom CSS for dashboard aesthetic matching the inspiration layout
+# Custom CSS for high-impact colors, modern fonts, and card styling
 st.markdown("""
 <style>
-    .main-title {
-        font-size: 2.8rem;
-        font-weight: 800;
+    /* Global Page Styling */
+    .stApp {
+        background: linear-gradient(135deg, #F8FAFC 0%, #EFF6FF 100%);
+    }
+    
+    /* Hero Header Styling */
+    .hero-title {
+        font-size: 3.5rem !important;
+        font-weight: 900 !important;
         text-align: center;
-        background: linear-gradient(90deg, #1E1B4B 0%, #7C3AED 100%);
+        background: linear-gradient(90deg, #2563EB 0%, #7C3AED 50%, #DB2777 100%);
         -webkit-background-clip: text;
         -webkit-text-fill-color: transparent;
-        margin-bottom: 0.2rem;
+        margin-top: -1rem;
+        margin-bottom: 0.5rem;
+        letter-spacing: -0.02em;
     }
-    .sub-title {
+    
+    .hero-subtitle {
         text-align: center;
-        color: #64748B;
-        font-size: 1.1rem;
+        color: #475569;
+        font-size: 1.3rem !important;
+        font-weight: 500;
         margin-bottom: 2rem;
+        max-width: 800px;
+        margin-left: auto;
+        margin-right: auto;
     }
+
+    /* Metric Card Styling */
+    div[data-testid="stMetric"] {
+        background: #FFFFFF;
+        border: 1px solid #E2E8F0;
+        padding: 1.25rem;
+        border-radius: 1rem;
+        box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.05), 0 2px 4px -1px rgba(0, 0, 0, 0.06);
+        text-align: center;
+    }
+    
+    div[data-testid="stMetricLabel"] {
+        font-size: 1rem !important;
+        color: #64748B !important;
+        font-weight: 600 !important;
+    }
+    
+    div[data-testid="stMetricValue"] {
+        font-size: 2.2rem !important;
+        color: #1E293B !important;
+        font-weight: 800 !important;
+    }
+
+    /* Comment Quote Cards */
     .quote-card {
-        background-color: #F8FAFC;
-        border-left: 4px solid #7C3AED;
-        padding: 1rem;
-        border-radius: 0.5rem;
-        margin-bottom: 0.8rem;
-        color: #334155;
-        font-size: 0.95rem;
-    }
-    .report-card {
-        background-color: #F5F3FF;
-        border: 1px solid #DDD6FE;
+        background-color: #FFFFFF;
+        border-left: 5px solid #7C3AED;
+        padding: 1.2rem;
         border-radius: 0.75rem;
-        padding: 1.5rem;
-        margin-top: 1rem;
-        margin-bottom: 1.5rem;
+        margin-bottom: 1rem;
+        color: #334155;
+        font-size: 1rem;
+        box-shadow: 0 2px 4px rgba(0,0,0,0.04);
+    }
+    
+    /* AI Report Card Box */
+    .report-card {
+        background: linear-gradient(135deg, #F5F3FF 0%, #EEF2FF 100%);
+        border: 1px solid #C7D2FE;
+        border-radius: 1rem;
+        padding: 2rem;
+        margin-top: 1.5rem;
+        margin-bottom: 2rem;
+        box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.05);
+    }
+    
+    .report-title {
+        color: #3730A3;
+        font-size: 1.6rem;
+        font-weight: 800;
+        margin-bottom: 1rem;
     }
 </style>
 """, unsafe_allow_html=True)
@@ -225,29 +273,40 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
 
 
 # ==========================================
-# MAIN STREAMLIT UI
+# MAIN STREAMLIT LANDING PAGE UI
 # ==========================================
-st.markdown('<div class="main-title">YouTube Sentiment Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyze YouTube video comments to understand audience sentiment and engagement patterns with AI-powered insights</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-title">YouTube Sentiment Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="hero-subtitle">Analyze YouTube video comments to understand audience sentiment and engagement patterns with AI-powered insights.</div>', unsafe_allow_html=True)
 
-# Mode Selector
-analysis_mode = st.radio(
-    "Select Input Mode:",
-    ("Analyze YouTube Video Link", "Paste Raw Article Text"),
-    horizontal=True
-)
+# Centered Search & Selection Controls
+col_left, col_center, col_right = st.columns([1, 6, 1])
 
-if analysis_mode == "Analyze YouTube Video Link":
-    youtube_url = st.text_input("YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
-else:
-    article_text = st.text_area("Paste Article Text Here", height=200)
+with col_center:
+    analysis_mode = st.radio(
+        "Select Input Mode:",
+        ("Analyze YouTube Video Link", "Paste Raw Article Text"),
+        horizontal=True,
+        label_visibility="collapsed"
+    )
 
-if st.button("Run Dashboard Analysis", type="primary"):
+    if analysis_mode == "Analyze YouTube Video Link":
+        youtube_url = st.text_input("", placeholder="🔍 Paste YouTube Video URL (e.g. https://www.youtube.com/watch?v=...)", label_visibility="collapsed")
+    else:
+        article_text = st.text_area("", placeholder="📝 Paste raw article text here...", height=200, label_visibility="collapsed")
+
+    btn_col1, btn_col2, btn_col3 = st.columns([2, 3, 2])
+    with btn_col2:
+        run_btn = st.button("🚀 Launch Analysis Engine", type="primary", use_container_width=True)
+
+# ==========================================
+# ANALYSIS EXECUTION
+# ==========================================
+if run_btn:
     if not openrouter_api_key:
         st.error("API Key missing from Secrets. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    with st.spinner("Analyzing comments and generating dashboard metrics..."):
+    with st.spinner("⚡ Fetching comments and generating AI insights..."):
         try:
             if analysis_mode == "Analyze YouTube Video Link":
                 if not youtube_url.strip():
@@ -263,22 +322,23 @@ if st.button("Run Dashboard Analysis", type="primary"):
                 cat_comments = ai_output.get("categorized_comments", comments)
                 df = pd.DataFrame(cat_comments)
 
-                # Status Banner
-                st.success(" Analysis Complete — Successfully analyzed video comments")
+                # Success Banner
+                st.success("✅ **Analysis Complete** — Video comments successfully fetched and analyzed!")
 
-                # Metric Cards Bar
-                col1, col2, col3 = st.columns(3)
-                with col1:
+                # Metric Cards Display
+                m1, m2, m3 = st.columns(3)
+                with m1:
                     st.metric("Total Comments Analyzed", len(comments))
-                with col2:
-                    st.metric("Dominant Sentiment", ai_output.get("overall_sentiment", "Neutral"))
-                with col3:
+                with m2:
+                    sentiment_val = ai_output.get("overall_sentiment", "Neutral")
+                    st.metric("Dominant Sentiment", sentiment_val)
+                with m3:
                     total_likes = df["likes"].sum() if "likes" in df.columns else 0
-                    st.metric("Total Likes on Comments", total_likes)
+                    st.metric("Total Engagement (Likes)", total_likes)
 
-                st.markdown("---")
+                st.markdown("<br>", unsafe_allow_html=True)
 
-                # Qualitative Comment Categories Section
+                # Comment Categories Tabs
                 st.subheader("💬 Comment Categories")
                 tab_interesting, tab_takes, tab_questions = st.tabs([
                     f"⭐ Most Interesting ({len(ai_output.get('most_interesting', []))})",
@@ -310,9 +370,11 @@ if st.button("Run Dashboard Analysis", type="primary"):
                     else:
                         st.info("No explicit audience questions detected.")
 
-                # Full Executive AI Analysis Report Box
-                st.markdown('<div class="report-card">', unsafe_allow_html=True)
-                st.subheader("🤖 AI Analysis Report")
+                # Styled AI Analysis Report Box
+                st.markdown("""
+                <div class="report-card">
+                    <div class="report-title">🤖 AI Analysis Report</div>
+                """, unsafe_allow_html=True)
 
                 st.markdown("**Executive Summary:**")
                 st.write(ai_output.get("summary", ""))
@@ -323,14 +385,14 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 rec_list = ai_output.get("recommendations", [])
                 if rec_list:
-                    st.markdown("**Recommendations:**")
+                    st.markdown("**Strategic Recommendations:**")
                     for idx, rec in enumerate(rec_list, 1):
                         st.markdown(f"{idx}. {rec}")
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Raw Comments Data Table & PDF Download
-                st.subheader("📋 Public Comments Breakdown Table")
+                # Raw Comments Table & Export Section
+                st.subheader("📋 Public Comments Breakdown")
                 st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
 
                 pdf_bytes = generate_pdf(
@@ -340,10 +402,10 @@ if st.button("Run Dashboard Analysis", type="primary"):
                     sentiment=ai_output.get("overall_sentiment", "Neutral"),
                     comments_data=cat_comments
                 )
-                st.download_button("📥 Download PDF Executive Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
+                st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
 
             else:
-                # Fallback for Raw Text Mode
+                # Raw Text Processing Mode
                 if not article_text.strip():
                     st.warning("Please paste some text first.")
                     st.stop()
