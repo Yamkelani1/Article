@@ -11,13 +11,51 @@ from reportlab.lib.styles import getSampleStyleSheet, ParagraphStyle
 from youtube_comment_downloader import YoutubeCommentDownloader
 
 # ==========================================
-# PAGE CONFIGURATION
+# PAGE CONFIGURATION & STYLING
 # ==========================================
 st.set_page_config(
-    page_title="Article & Social Sentiment Analyzer",
-    page_icon="📰",
+    page_title="YouTube Sentiment Dashboard",
+    page_icon="🔮",
     layout="wide"
 )
+
+# Custom CSS for dashboard aesthetic matching the inspiration layout
+st.markdown("""
+<style>
+    .main-title {
+        font-size: 2.8rem;
+        font-weight: 800;
+        text-align: center;
+        background: linear-gradient(90deg, #1E1B4B 0%, #7C3AED 100%);
+        -webkit-background-clip: text;
+        -webkit-text-fill-color: transparent;
+        margin-bottom: 0.2rem;
+    }
+    .sub-title {
+        text-align: center;
+        color: #64748B;
+        font-size: 1.1rem;
+        margin-bottom: 2rem;
+    }
+    .quote-card {
+        background-color: #F8FAFC;
+        border-left: 4px solid #7C3AED;
+        padding: 1rem;
+        border-radius: 0.5rem;
+        margin-bottom: 0.8rem;
+        color: #334155;
+        font-size: 0.95rem;
+    }
+    .report-card {
+        background-color: #F5F3FF;
+        border: 1px solid #DDD6FE;
+        border-radius: 0.75rem;
+        padding: 1.5rem;
+        margin-top: 1rem;
+        margin-bottom: 1.5rem;
+    }
+</style>
+""", unsafe_allow_html=True)
 
 # Load API Key from Streamlit Secrets or Environment
 openrouter_api_key = st.secrets.get("OPENROUTER_API_KEY", "")
@@ -32,7 +70,6 @@ def clean_text_for_pdf(text):
     """Remove emojis and non-standard ASCII characters that crash ReportLab PDF fonts."""
     if not isinstance(text, str):
         text = str(text)
-    # Strip emojis / non-latin characters for PDF safety
     return re.sub(r'[^\x00-\x7F]+', '', text).strip()
 
 
@@ -56,7 +93,7 @@ def fetch_youtube_comments(video_url, max_comments=30):
 
 
 def analyze_with_openrouter(content_data, mode="text", api_key=""):
-    """Send text or comments to OpenRouter for AI sentiment analysis and summarization."""
+    """Send text or comments to OpenRouter for AI sentiment analysis and qualitative extraction."""
     if mode == "text":
         prompt = f"""
         Analyze the following article text and provide a structured JSON response with:
@@ -71,12 +108,16 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         """
     else: # mode == "youtube"
         prompt = f"""
-        Analyze these YouTube comments and categorize each comment individually.
+        Analyze these YouTube comments and categorize each comment individually while extracting qualitative themes.
         Provide a structured JSON response with:
         1. "overall_sentiment": "Positive", "Negative", or "Neutral"
-        2. "summary": An executive summary highlighting key takeaways, main praise, and major complaints/pain points.
-        3. "key_points": A list of 3 to 5 main recurring themes or talking points from viewers.
-        4. "categorized_comments": A list of objects where EVERY input comment is included with its original "author", "text", "likes", and an assigned "sentiment" ("Positive", "Negative", or "Neutral").
+        2. "summary": An executive summary highlighting key takeaways, main praise, and major complaints.
+        3. "key_points": A list of 3 to 5 main recurring themes.
+        4. "most_interesting": A list of up to 3 highly engaging or insightful comment strings.
+        5. "hot_takes": A list of up to 3 controversial, strong, or provocative opinions from comments.
+        6. "questions": A list of up to 3 viewer questions raised in comments.
+        7. "recommendations": A list of 3 strategic recommendations based on audience response.
+        8. "categorized_comments": A list of objects where EVERY input comment is included with "author", "text", "likes", and "sentiment" ("Positive", "Negative", "Neutral").
 
         Comments Data:
         {json.dumps(content_data)}
@@ -141,7 +182,6 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
             elements.append(Spacer(1, 4))
         elements.append(Spacer(1, 12))
 
-    # Add Comments Table to PDF
     if comments_data:
         elements.append(Paragraph("Public Comments & Sentiment Breakdown", heading_style))
         elements.append(Spacer(1, 8))
@@ -187,28 +227,123 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
 # ==========================================
 # MAIN STREAMLIT UI
 # ==========================================
-st.title("📰 Article & Social Sentiment Analyzer")
-st.markdown("Analyze raw article text or YouTube video audience feedback seamlessly using AI.")
+st.markdown('<div class="main-title">YouTube Sentiment Dashboard</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Analyze YouTube video comments to understand audience sentiment and engagement patterns with AI-powered insights</div>', unsafe_allow_html=True)
 
+# Mode Selector
 analysis_mode = st.radio(
     "Select Input Mode:",
-    ("Paste Raw Article Text", "Analyze YouTube Video Link"),
+    ("Analyze YouTube Video Link", "Paste Raw Article Text"),
     horizontal=True
 )
 
-if analysis_mode == "Paste Raw Article Text":
-    article_text = st.text_area("Paste Article Text Here", height=250)
+if analysis_mode == "Analyze YouTube Video Link":
+    youtube_url = st.text_input("YouTube Video URL", placeholder="https://www.youtube.com/watch?v=...")
 else:
-    youtube_url = st.text_input("Enter YouTube Video URL")
+    article_text = st.text_area("Paste Article Text Here", height=200)
 
-if st.button("Run Analysis"):
+if st.button("Run Dashboard Analysis", type="primary"):
     if not openrouter_api_key:
         st.error("API Key missing from Secrets. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    with st.spinner("Processing analysis via OpenRouter AI..."):
+    with st.spinner("Analyzing comments and generating dashboard metrics..."):
         try:
-            if analysis_mode == "Paste Raw Article Text":
+            if analysis_mode == "Analyze YouTube Video Link":
+                if not youtube_url.strip():
+                    st.warning("Please enter a valid YouTube URL first.")
+                    st.stop()
+
+                comments = fetch_youtube_comments(youtube_url)
+                if not comments:
+                    st.error("No comments found or couldn't fetch comments from this video.")
+                    st.stop()
+
+                ai_output = analyze_with_openrouter(comments, mode="youtube", api_key=openrouter_api_key)
+                cat_comments = ai_output.get("categorized_comments", comments)
+                df = pd.DataFrame(cat_comments)
+
+                # Status Banner
+                st.success(" Analysis Complete — Successfully analyzed video comments")
+
+                # Metric Cards Bar
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Total Comments Analyzed", len(comments))
+                with col2:
+                    st.metric("Dominant Sentiment", ai_output.get("overall_sentiment", "Neutral"))
+                with col3:
+                    total_likes = df["likes"].sum() if "likes" in df.columns else 0
+                    st.metric("Total Likes on Comments", total_likes)
+
+                st.markdown("---")
+
+                # Qualitative Comment Categories Section
+                st.subheader("💬 Comment Categories")
+                tab_interesting, tab_takes, tab_questions = st.tabs([
+                    f"⭐ Most Interesting ({len(ai_output.get('most_interesting', []))})",
+                    f"🔥 Hot Takes ({len(ai_output.get('hot_takes', []))})",
+                    f"❓ Questions ({len(ai_output.get('questions', []))})"
+                ])
+
+                with tab_interesting:
+                    interesting_items = ai_output.get("most_interesting", [])
+                    if interesting_items:
+                        for q in interesting_items:
+                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No key interesting highlights categorized.")
+
+                with tab_takes:
+                    hot_items = ai_output.get("hot_takes", [])
+                    if hot_items:
+                        for q in hot_items:
+                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No strong hot takes categorized.")
+
+                with tab_questions:
+                    question_items = ai_output.get("questions", [])
+                    if question_items:
+                        for q in question_items:
+                            st.markdown(f'<div class="quote-card">"{q}"</div>', unsafe_allow_html=True)
+                    else:
+                        st.info("No explicit audience questions detected.")
+
+                # Full Executive AI Analysis Report Box
+                st.markdown('<div class="report-card">', unsafe_allow_html=True)
+                st.subheader("🤖 AI Analysis Report")
+
+                st.markdown("**Executive Summary:**")
+                st.write(ai_output.get("summary", ""))
+
+                st.markdown("**Key Takeaways:**")
+                for pt in ai_output.get("key_points", []):
+                    st.markdown(f"* {pt}")
+
+                rec_list = ai_output.get("recommendations", [])
+                if rec_list:
+                    st.markdown("**Recommendations:**")
+                    for idx, rec in enumerate(rec_list, 1):
+                        st.markdown(f"{idx}. {rec}")
+
+                st.markdown('</div>', unsafe_allow_html=True)
+
+                # Raw Comments Data Table & PDF Download
+                st.subheader("📋 Public Comments Breakdown Table")
+                st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
+
+                pdf_bytes = generate_pdf(
+                    title="YouTube Audience Analysis Report",
+                    summary=ai_output.get("summary", ""),
+                    extra_info=ai_output.get("key_points", []),
+                    sentiment=ai_output.get("overall_sentiment", "Neutral"),
+                    comments_data=cat_comments
+                )
+                st.download_button("📥 Download PDF Executive Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
+
+            else:
+                # Fallback for Raw Text Mode
                 if not article_text.strip():
                     st.warning("Please paste some text first.")
                     st.stop()
@@ -217,13 +352,7 @@ if st.button("Run Analysis"):
 
                 st.subheader("Analysis Results")
                 sentiment = ai_output.get("overall_sentiment", "Neutral")
-
-                if sentiment == "Positive":
-                    st.success(f"Overall Sentiment: **{sentiment}**")
-                elif sentiment == "Negative":
-                    st.error(f"Overall Sentiment: **{sentiment}**")
-                else:
-                    st.info(f"Overall Sentiment: **{sentiment}**")
+                st.info(f"Overall Sentiment: **{sentiment}**")
 
                 st.markdown("### Executive Summary")
                 st.write(ai_output.get("summary", ""))
@@ -239,81 +368,6 @@ if st.button("Run Analysis"):
                     sentiment=sentiment
                 )
                 st.download_button("📥 Download PDF Report", pdf_bytes, file_name="article_report.pdf", mime="application/pdf")
-
-            else:
-                if not youtube_url.strip():
-                    st.warning("Please enter a valid YouTube URL first.")
-                    st.stop()
-
-                comments = fetch_youtube_comments(youtube_url)
-                if not comments:
-                    st.error("No comments found or couldn't fetch comments from this video.")
-                    st.stop()
-
-                ai_output = analyze_with_openrouter(comments, mode="youtube", api_key=openrouter_api_key)
-
-                st.subheader("YouTube Audience Feedback Results")
-                sentiment = ai_output.get("overall_sentiment", "Neutral")
-
-                if sentiment == "Positive":
-                    st.success(f"Overall Audience Sentiment: **{sentiment}**")
-                elif sentiment == "Negative":
-                    st.error(f"Overall Audience Sentiment: **{sentiment}**")
-                else:
-                    st.info(f"Overall Audience Sentiment: **{sentiment}**")
-
-                st.markdown("### Executive Summary")
-                st.write(ai_output.get("summary", ""))
-
-                st.markdown("### Recurring Feedback Themes")
-                for point in ai_output.get("key_points", []):
-                    st.markdown(f"* {point}")
-
-                cat_comments = ai_output.get("categorized_comments", comments)
-
-                # Generate PDF with full comments table safely sanitized
-                pdf_bytes = generate_pdf(
-                    title="YouTube Audience Analysis Report",
-                    summary=ai_output.get("summary", ""),
-                    extra_info=ai_output.get("key_points", []),
-                    sentiment=sentiment,
-                    comments_data=cat_comments
-                )
-                st.download_button("📥 Download PDF Report", pdf_bytes, file_name="youtube_report.pdf", mime="application/pdf")
-
-                st.markdown("---")
-                st.subheader("💬 Public Comments & Sentiment Breakdown")
-
-                df = pd.DataFrame(cat_comments)
-
-                if "sentiment" not in df.columns:
-                    df["sentiment"] = "Neutral"
-
-                tab_all, tab_pos, tab_neu, tab_neg = st.tabs(["All Comments", "Positive 😀", "Neutral 😐", "Negative 😡"])
-
-                with tab_all:
-                    st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
-
-                with tab_pos:
-                    pos_df = df[df["sentiment"].str.lower() == "positive"]
-                    if not pos_df.empty:
-                        st.dataframe(pos_df[["author", "text", "likes"]], use_container_width=True)
-                    else:
-                        st.info("No positive comments detected.")
-
-                with tab_neu:
-                    neu_df = df[df["sentiment"].str.lower() == "neutral"]
-                    if not neu_df.empty:
-                        st.dataframe(neu_df[["author", "text", "likes"]], use_container_width=True)
-                    else:
-                        st.info("No neutral comments detected.")
-
-                with tab_neg:
-                    neg_df = df[df["sentiment"].str.lower() == "negative"]
-                    if not neg_df.empty:
-                        st.dataframe(neg_df[["author", "text", "likes"]], use_container_width=True)
-                    else:
-                        st.info("No negative comments detected.")
 
         except Exception as e:
             st.error(f"Error executing analysis: {e}")
