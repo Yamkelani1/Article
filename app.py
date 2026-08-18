@@ -4,6 +4,7 @@ import re
 import requests
 import streamlit as st
 import pandas as pd
+import plotly.express as px
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -14,12 +15,12 @@ from youtube_comment_downloader import YoutubeCommentDownloader
 # PAGE CONFIGURATION & STYLING
 # ==========================================
 st.set_page_config(
-    page_title="YouTube Sentiment Dashboard",
+    page_title="Article and YouTube Sentiment Analyzer",
     page_icon="🔮",
     layout="wide"
 )
 
-# Custom CSS for dashboard aesthetic matching the inspiration layout
+# Custom CSS
 st.markdown("""
 <style>
     .main-title {
@@ -73,8 +74,8 @@ def clean_text_for_pdf(text):
     return re.sub(r'[^\x00-\x7F]+', '', text).strip()
 
 
-def fetch_youtube_comments(video_url, max_comments=30):
-    """Fetch public comments from a YouTube video URL."""
+def fetch_youtube_comments(video_url, max_comments=100):
+    """Fetch public comments from a YouTube video URL (fetches up to 100 comments)."""
     downloader = YoutubeCommentDownloader()
     comments = []
     try:
@@ -98,8 +99,10 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         prompt = f"""
         Analyze the following article text and provide a structured JSON response with:
         1. "overall_sentiment": "Positive", "Negative", or "Neutral"
-        2. "summary": A concise executive summary of the article (3-5 sentences).
-        3. "key_points": A list of 3 to 5 key bullet points.
+        2. "confidence_score": A percentage value between 0% and 100% representing AI analytical confidence.
+        3. "article_tone": A description of the overall tone (e.g., Authoritative, Critical, Informative, Persuasive, Conversational).
+        4. "summary": A detailed, thorough executive summary (at least 6 to 8 sentences). Do NOT make it brief. Explicitly discuss the article's core narrative, the tone used by the author, key facts, and the confidence level of the analysis.
+        5. "key_points": A list of 4 to 6 comprehensive bullet points.
 
         Article Text:
         {content_data}
@@ -111,13 +114,15 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         Analyze these YouTube comments and categorize each comment individually while extracting qualitative themes.
         Provide a structured JSON response with:
         1. "overall_sentiment": "Positive", "Negative", or "Neutral"
-        2. "summary": An executive summary highlighting key takeaways, main praise, and major complaints.
-        3. "key_points": A list of 3 to 5 main recurring themes.
-        4. "most_interesting": A list of up to 3 highly engaging or insightful comment strings.
-        5. "hot_takes": A list of up to 3 controversial, strong, or provocative opinions from comments.
-        6. "questions": A list of up to 3 viewer questions raised in comments.
-        7. "recommendations": A list of 3 strategic recommendations based on audience response.
-        8. "categorized_comments": A list of objects where EVERY input comment is included with "author", "text", "likes", and "sentiment" ("Positive", "Negative", "Neutral").
+        2. "confidence_score": A percentage value between 0% and 100% representing confidence in sentiment classification.
+        3. "overall_tone": A description of the audience's tone (e.g., Enthusiastic, Critical, Sarcastic, Inquisitive).
+        4. "summary": A detailed executive summary (at least 6 to 8 sentences). Discuss the general audience reaction, overall tone, main areas of praise or criticism, and the analytical confidence score.
+        5. "key_points": A list of 4 to 6 main recurring themes.
+        6. "most_interesting": A list of 12 to 20 highly engaging, detailed, or insightful comment quotes extracted from the data.
+        7. "hot_takes": A list of 12 to 20 controversial, strong, or provocative opinion quotes extracted from the data.
+        8. "questions": A list of 12 to 20 viewer questions raised in comments.
+        9. "recommendations": A list of 3 to 5 strategic recommendations based on audience feedback.
+        10. "categorized_comments": A list of objects where EVERY input comment is included with "author", "text", "likes", and "sentiment" ("Positive", "Negative", "Neutral").
 
         Comments Data:
         {json.dumps(content_data)}
@@ -145,7 +150,7 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
     return json.loads(response_text)
 
 
-def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=None):
+def generate_pdf(title, summary, extra_info=None, sentiment=None, confidence=None, tone=None, comments_data=None):
     """Generate downloadable PDF report containing summary, points, and comment breakdown table."""
     buffer = io.BytesIO()
     doc = SimpleDocTemplate(buffer, pagesize=letter, rightMargin=36, leftMargin=36, topMargin=36, bottomMargin=36)
@@ -163,8 +168,14 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
     ]
 
     if sentiment:
-        sentiment_style = ParagraphStyle('SentimentStyle', parent=styles['Normal'], fontSize=11, fontName='Helvetica-Bold')
-        elements.append(Paragraph(f"<b>Overall Audience Sentiment:</b> {clean_text_for_pdf(sentiment)}", sentiment_style))
+        meta_text = f"<b>Overall Sentiment:</b> {clean_text_for_pdf(sentiment)}"
+        if confidence:
+            meta_text += f" | <b>Confidence Score:</b> {clean_text_for_pdf(str(confidence))}"
+        if tone:
+            meta_text += f" | <b>Tone:</b> {clean_text_for_pdf(tone)}"
+
+        sentiment_style = ParagraphStyle('SentimentStyle', parent=styles['Normal'], fontSize=10, fontName='Helvetica-Bold')
+        elements.append(Paragraph(meta_text, sentiment_style))
         elements.append(Spacer(1, 10))
 
     elements.extend([
@@ -227,8 +238,8 @@ def generate_pdf(title, summary, extra_info=None, sentiment=None, comments_data=
 # ==========================================
 # MAIN STREAMLIT UI
 # ==========================================
-st.markdown('<div class="main-title">YouTube Sentiment Dashboard</div>', unsafe_allow_html=True)
-st.markdown('<div class="sub-title">Analyze YouTube video comments to understand audience sentiment and engagement patterns with AI-powered insights</div>', unsafe_allow_html=True)
+st.markdown('<div class="main-title">Article and YouTube Sentiment Analyzer</div>', unsafe_allow_html=True)
+st.markdown('<div class="sub-title">Analyze YouTube comments and raw article text to extract deep sentiment metrics, audience tone, and qualitative insights</div>', unsafe_allow_html=True)
 
 # Mode Selector
 analysis_mode = st.radio(
@@ -247,14 +258,14 @@ if st.button("Run Dashboard Analysis", type="primary"):
         st.error("API Key missing from Secrets. Please set OPENROUTER_API_KEY in Streamlit Secrets.")
         st.stop()
 
-    with st.spinner("Analyzing comments and generating dashboard metrics..."):
+    with st.spinner("Analyzing content and generating metrics..."):
         try:
             if analysis_mode == "Analyze YouTube Video Link":
                 if not youtube_url.strip():
                     st.warning("Please enter a valid YouTube URL first.")
                     st.stop()
 
-                comments = fetch_youtube_comments(youtube_url)
+                comments = fetch_youtube_comments(youtube_url, max_comments=100)
                 if not comments:
                     st.error("No comments found or couldn't fetch comments from this video.")
                     st.stop()
@@ -264,22 +275,23 @@ if st.button("Run Dashboard Analysis", type="primary"):
                 df = pd.DataFrame(cat_comments)
 
                 # Status Banner
-                st.success(" Analysis Complete — Successfully analyzed video comments")
+                st.success(f" Analysis Complete — Successfully fetched and analyzed {len(df)} video comments.")
 
                 # Metric Cards Bar
-                col1, col2, col3 = st.columns(3)
+                col1, col2, col3, col4 = st.columns(4)
                 with col1:
-                    st.metric("Total Comments Analyzed", len(comments))
+                    st.metric("Comments Analyzed", len(df))
                 with col2:
                     st.metric("Dominant Sentiment", ai_output.get("overall_sentiment", "Neutral"))
                 with col3:
-                    total_likes = df["likes"].sum() if "likes" in df.columns else 0
-                    st.metric("Total Likes on Comments", total_likes)
+                    st.metric("Confidence Score", ai_output.get("confidence_score", "N/A"))
+                with col4:
+                    st.metric("Audience Tone", ai_output.get("overall_tone", "N/A"))
 
                 st.markdown("---")
 
                 # Qualitative Comment Categories Section
-                st.subheader("💬 Comment Categories")
+                st.subheader("💬 Qualitative Comment Categories")
                 tab_interesting, tab_takes, tab_questions = st.tabs([
                     f"⭐ Most Interesting ({len(ai_output.get('most_interesting', []))})",
                     f"🔥 Hot Takes ({len(ai_output.get('hot_takes', []))})",
@@ -312,7 +324,7 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 # Full Executive AI Analysis Report Box
                 st.markdown('<div class="report-card">', unsafe_allow_html=True)
-                st.subheader("🤖 AI Analysis Report")
+                st.subheader("🤖 Detailed AI Analysis Report")
 
                 st.markdown("**Executive Summary:**")
                 st.write(ai_output.get("summary", ""))
@@ -323,14 +335,34 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 rec_list = ai_output.get("recommendations", [])
                 if rec_list:
-                    st.markdown("**Recommendations:**")
+                    st.markdown("**Strategic Recommendations:**")
                     for idx, rec in enumerate(rec_list, 1):
                         st.markdown(f"{idx}. {rec}")
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
+                # Sentiment Distribution Pie Chart
+                st.subheader("📊 Sentiment Breakdown Chart")
+                if "sentiment" in df.columns and not df.empty:
+                    sentiment_counts = df["sentiment"].value_counts().reset_index()
+                    sentiment_counts.columns = ["Sentiment", "Count"]
+
+                    color_map = {"Positive": "#22C55E", "Neutral": "#64748B", "Negative": "#EF4444"}
+
+                    fig = px.pie(
+                        sentiment_counts,
+                        names="Sentiment",
+                        values="Count",
+                        title="Audience Sentiment Distribution",
+                        color="Sentiment",
+                        color_discrete_map=color_map,
+                        hole=0.4
+                    )
+                    fig.update_traces(textposition='inside', textinfo='percent+label')
+                    st.plotly_chart(fig, use_container_width=True)
+
                 # Raw Comments Data Table & PDF Download
-                st.subheader("📋 Public Comments Breakdown Table")
+                st.subheader(f"📋 Public Comments Breakdown Table ({len(df)} Comments)")
                 st.dataframe(df[["author", "text", "likes", "sentiment"]], use_container_width=True)
 
                 pdf_bytes = generate_pdf(
@@ -338,34 +370,47 @@ if st.button("Run Dashboard Analysis", type="primary"):
                     summary=ai_output.get("summary", ""),
                     extra_info=ai_output.get("key_points", []),
                     sentiment=ai_output.get("overall_sentiment", "Neutral"),
+                    confidence=ai_output.get("confidence_score", "N/A"),
+                    tone=ai_output.get("overall_tone", "N/A"),
                     comments_data=cat_comments
                 )
                 st.download_button("📥 Download PDF Executive Report", pdf_bytes, file_name="youtube_analysis_report.pdf", mime="application/pdf")
 
             else:
-                # Fallback for Raw Text Mode
+                # Raw Text Mode
                 if not article_text.strip():
-                    st.warning("Please paste some text first.")
+                    st.warning("Please paste some article text first.")
                     st.stop()
 
                 ai_output = analyze_with_openrouter(article_text, mode="text", api_key=openrouter_api_key)
 
-                st.subheader("Analysis Results")
-                sentiment = ai_output.get("overall_sentiment", "Neutral")
-                st.info(f"Overall Sentiment: **{sentiment}**")
+                st.success(" Analysis Complete — Article content evaluated.")
 
-                st.markdown("### Executive Summary")
+                col1, col2, col3 = st.columns(3)
+                with col1:
+                    st.metric("Overall Sentiment", ai_output.get("overall_sentiment", "Neutral"))
+                with col2:
+                    st.metric("Confidence Score", ai_output.get("confidence_score", "N/A"))
+                with col3:
+                    st.metric("Article Tone", ai_output.get("article_tone", "N/A"))
+
+                # Detailed Summary Section
+                st.markdown('<div class="report-card">', unsafe_allow_html=True)
+                st.subheader("📝 Executive Summary & Tone Analysis")
                 st.write(ai_output.get("summary", ""))
 
                 st.markdown("### Key Takeaways")
                 for point in ai_output.get("key_points", []):
                     st.markdown(f"* {point}")
+                st.markdown('</div>', unsafe_allow_html=True)
 
                 pdf_bytes = generate_pdf(
                     title="Article Analysis Report",
                     summary=ai_output.get("summary", ""),
                     extra_info=ai_output.get("key_points", []),
-                    sentiment=sentiment
+                    sentiment=ai_output.get("overall_sentiment", "Neutral"),
+                    confidence=ai_output.get("confidence_score", "N/A"),
+                    tone=ai_output.get("article_tone", "N/A")
                 )
                 st.download_button("📥 Download PDF Report", pdf_bytes, file_name="article_report.pdf", mime="application/pdf")
 
