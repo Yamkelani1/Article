@@ -139,12 +139,13 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Switched to active free Gemini model
+    # Switched to Meta Llama 3.3 70B free tier
     payload = {
-        "model": "google/gemini-2.0-flash-exp:free",
+        "model": "meta-llama/llama-3.3-70b-instruct:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
+
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
     if response.status_code != 200:
         raise Exception(f"OpenRouter API Error ({response.status_code}): {response.text}")
@@ -350,17 +351,13 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Sentiment Distribution Pie Chart (Green, Red, Orange)
+                # Sentiment Distribution Pie Chart
                 st.subheader("📊 Sentiment Breakdown Chart")
                 if "sentiment" in df.columns and not df.empty:
                     sentiment_counts = df["sentiment"].value_counts().reset_index()
                     sentiment_counts.columns = ["Sentiment", "Count"]
 
-                    color_map = {
-                        "Positive": "#22C55E",  # Green
-                        "Negative": "#EF4444",  # Red
-                        "Neutral": "#F97316"    # Orange
-                    }
+                    color_map = {"Positive": "#22C55E", "Neutral": "#64748B", "Negative": "#EF4444"}
 
                     fig = px.pie(
                         sentiment_counts,
