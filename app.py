@@ -139,8 +139,9 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
+    # Using active free tier model
     payload = {
-        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "model": "deepseek/deepseek-r1:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
@@ -350,7 +351,7 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Sentiment Distribution Pie Chart with Updated Colors
+                # Sentiment Distribution Pie Chart with Green, Red, and Orange
                 st.subheader("📊 Sentiment Breakdown Chart")
                 if "sentiment" in df.columns and not df.empty:
                     sentiment_counts = df["sentiment"].value_counts().reset_index()
@@ -358,8 +359,8 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                     color_map = {
                         "Positive": "#22C55E",  # Green
-                        "Neutral": "#F97316",   # Orange
-                        "Negative": "#EF4444"   # Red
+                        "Negative": "#EF4444",  # Red
+                        "Neutral": "#F97316"    # Orange
                     }
 
                     fig = px.pie(
