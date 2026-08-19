@@ -5,6 +5,7 @@ import requests
 import streamlit as st
 import pandas as pd
 import plotly.express as px
+import plotly.graph_objects as go
 from reportlab.lib.pagesizes import letter
 from reportlab.lib import colors
 from reportlab.platypus import SimpleDocTemplate, Paragraph, Spacer, Table, TableStyle
@@ -72,6 +73,47 @@ def clean_text_for_pdf(text):
     if not isinstance(text, str):
         text = str(text)
     return re.sub(r'[^\x00-\x7F]+', '', text).strip()
+
+
+def render_combined_metric_chart(sentiment, confidence_val, tone):
+    """Render unified Bullet Gauge Chart containing Confidence Score, Sentiment, and Tone."""
+    sentiment_colors = {
+        "Positive": "#22C55E",
+        "Neutral": "#64748B",
+        "Negative": "#EF4444"
+    }
+    main_color = sentiment_colors.get(sentiment, "#64748B")
+
+    try:
+        conf_num = float(str(confidence_val).replace("%", "").strip())
+    except ValueError:
+        conf_num = 0.0
+
+    fig = go.Figure()
+    fig.add_trace(go.Indicator(
+        mode = "number+gauge",
+        value = conf_num,
+        number = {'suffix': "%", 'font': {'size': 36, 'color': '#1E1B4B'}},
+        title = {
+            'text': f"<b>Sentiment:</b> {sentiment}<br><span style='font-size:0.8em;color:gray;'>Tone: {tone}</span>",
+            'font': {'size': 18}
+        },
+        gauge = {
+            'shape': "bullet",
+            'axis': {'range': [0, 100]},
+            'threshold': {
+                'line': {'color': "black", 'width': 2},
+                'thickness': 0.75,
+                'value': conf_num
+            },
+            'bar': {'color': main_color},
+            'bgcolor': "#F1F5F9",
+            'bordercolor': "#CBD5E1"
+        }
+    ))
+
+    fig.update_layout(height=170, margin=dict(l=20, r=20, t=50, b=20))
+    st.plotly_chart(fig, use_container_width=True)
 
 
 def fetch_youtube_comments(video_url, max_comments=100):
@@ -399,13 +441,13 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.success(" Analysis Complete — Article content evaluated.")
 
-            render_combined_metric_chart(
-                sentiment=ai_output.get("overall_sentiment", "Neutral"),
-                confidence_val=ai_output.get("confidence_score", "N/A"),
-                tone=ai_output.get("article_tone", "N/A")
-            )
+                render_combined_metric_chart(
+                    sentiment=ai_output.get("overall_sentiment", "Neutral"),
+                    confidence_val=ai_output.get("confidence_score", "N/A"),
+                    tone=ai_output.get("article_tone", "N/A")
+                )
 
-            # Detailed Summary Section
+                # Detailed Summary Section
                 st.markdown('<div class="report-card">', unsafe_allow_html=True)
                 st.subheader("📝 Executive Summary & Tone Analysis")
                 st.write(ai_output.get("summary", ""))
