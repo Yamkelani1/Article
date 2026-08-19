@@ -140,7 +140,7 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
     }
 
     payload = {
-        "model": "nvidia/nemotron-3-ultra-550b-a55b:free",
+        "model": "google/gemini-2.0-flash-lite-001:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
@@ -350,13 +350,17 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Sentiment Distribution Pie Chart
+                # Sentiment Distribution Pie Chart with Updated Colors
                 st.subheader("📊 Sentiment Breakdown Chart")
                 if "sentiment" in df.columns and not df.empty:
                     sentiment_counts = df["sentiment"].value_counts().reset_index()
                     sentiment_counts.columns = ["Sentiment", "Count"]
 
-                    color_map = {"Positive": "#22C55E", "Neutral": "#64748B", "Negative": "#EF4444"}
+                    color_map = {
+                        "Positive": "#22C55E",  # Green
+                        "Neutral": "#F97316",   # Orange
+                        "Negative": "#EF4444"   # Red
+                    }
 
                     fig = px.pie(
                         sentiment_counts,
