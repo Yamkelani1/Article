@@ -139,13 +139,12 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Switched to gemini-2.0-flash-lite-001:free for ultra-fast processing speeds
+    # Switched to active free Gemini model
     payload = {
-        "model": "google/gemini-2.0-flash-lite-001:free",
+        "model": "google/gemini-2.0-flash-exp:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
-
     response = requests.post("https://openrouter.ai/api/v1/chat/completions", headers=headers, json=payload)
     if response.status_code != 200:
         raise Exception(f"OpenRouter API Error ({response.status_code}): {response.text}")
