@@ -139,7 +139,7 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Switched to an active free tier model
+    # Switched to gemini-2.0-flash-lite-001:free for ultra-fast processing speeds
     payload = {
         "model": "google/gemini-2.0-flash-lite-001:free",
         "messages": [{"role": "user", "content": prompt}],
