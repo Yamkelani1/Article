@@ -139,9 +139,9 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Switched to Meta Llama 3.3 70B free tier
+    # Free OpenRouter model configuration
     payload = {
-        "model": "meta-llama/llama-3.3-70b-instruct:free",
+        "model": "meta-llama/llama-3.1-8b-instruct:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
