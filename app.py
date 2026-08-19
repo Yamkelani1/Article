@@ -399,13 +399,11 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.success(" Analysis Complete — Article content evaluated.")
 
-                col1, col2, col3 = st.columns(3)
-                with col1:
-                    st.metric("Overall Sentiment", ai_output.get("overall_sentiment", "Neutral"))
-                with col2:
-                    st.metric("Confidence Score", ai_output.get("confidence_score", "N/A"))
-                with col3:
-                    st.metric("Article Tone", ai_output.get("article_tone", "N/A"))
+            render_combined_metric_chart(
+                sentiment=ai_output.get("overall_sentiment", "Neutral"),
+                confidence_val=ai_output.get("confidence_score", "N/A"),
+                tone=ai_output.get("article_tone", "N/A")
+            )
 
                 # Detailed Summary Section
                 st.markdown('<div class="report-card">', unsafe_allow_html=True)
