@@ -75,7 +75,7 @@ def clean_text_for_pdf(text):
 
 
 def fetch_youtube_comments(video_url, max_comments=100):
-    """Fetch public comments from a YouTube video URL (fetches up to 100 comments)."""
+    """Fetch public comments from a YouTube video URL safely (up to max_comments)."""
     downloader = YoutubeCommentDownloader()
     comments = []
     try:
@@ -90,11 +90,15 @@ def fetch_youtube_comments(video_url, max_comments=100):
             })
     except Exception as e:
         st.error(f"Error fetching YouTube comments: {e}")
+        return []
     return comments
 
 
 def analyze_with_openrouter(content_data, mode="text", api_key=""):
     """Send text or comments to OpenRouter for AI sentiment analysis and qualitative extraction."""
+    if not content_data:
+        raise ValueError("Content data provided for analysis is empty.")
+
     if mode == "text":
         prompt = f"""
         Analyze the following article text and provide a structured JSON response with:
@@ -146,7 +150,12 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         raise Exception(f"OpenRouter API Error ({response.status_code}): {response.text}")
 
     result = response.json()
-    response_text = result["choices"][0]["message"]["content"]
+
+    choices = result.get("choices", [])
+    if not choices or not choices[0].get("message", {}).get("content"):
+        raise ValueError("OpenRouter API returned an empty completion response.")
+
+    response_text = choices[0]["message"]["content"]
     return json.loads(response_text)
 
 
@@ -266,8 +275,8 @@ if st.button("Run Dashboard Analysis", type="primary"):
                     st.stop()
 
                 comments = fetch_youtube_comments(youtube_url, max_comments=100)
-                if not comments:
-                    st.error("No comments found or couldn't fetch comments from this video.")
+                if not comments or len(comments) == 0:
+                    st.error("No comments found or couldn't fetch comments from this video link. Verify comments are publicly enabled.")
                     st.stop()
 
                 ai_output = analyze_with_openrouter(comments, mode="youtube", api_key=openrouter_api_key)
