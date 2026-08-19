@@ -139,9 +139,9 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Using active free tier model
+    # Switched to an active free tier model
     payload = {
-        "model": "deepseek/deepseek-r1:free",
+        "model": "google/gemini-2.0-flash-lite-001:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
@@ -351,7 +351,7 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Sentiment Distribution Pie Chart with Green, Red, and Orange
+                # Sentiment Distribution Pie Chart (Green, Red, Orange)
                 st.subheader("📊 Sentiment Breakdown Chart")
                 if "sentiment" in df.columns and not df.empty:
                     sentiment_counts = df["sentiment"].value_counts().reset_index()
