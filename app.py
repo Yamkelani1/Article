@@ -139,9 +139,9 @@ def analyze_with_openrouter(content_data, mode="text", api_key=""):
         "Content-Type": "application/json"
     }
 
-    # Free OpenRouter model configuration
+    # Switched to gemini-2.0-flash-lite-001:free for ultra-fast processing speeds
     payload = {
-        "model": "meta-llama/llama-3.1-8b-instruct:free",
+        "model": "google/gemini-2.0-flash-lite-001:free",
         "messages": [{"role": "user", "content": prompt}],
         "response_format": {"type": "json_object"}
     }
