@@ -350,13 +350,17 @@ if st.button("Run Dashboard Analysis", type="primary"):
 
                 st.markdown('</div>', unsafe_allow_html=True)
 
-                # Sentiment Distribution Pie Chart
+                # Sentiment Distribution Pie Chart with Updated Colors
                 st.subheader("📊 Sentiment Breakdown Chart")
                 if "sentiment" in df.columns and not df.empty:
                     sentiment_counts = df["sentiment"].value_counts().reset_index()
                     sentiment_counts.columns = ["Sentiment", "Count"]
 
-                    color_map = {"Positive": "#22C55E", "Neutral": "#64748B", "Negative": "#EF4444"}
+                    color_map = {
+                        "Positive": "#22C55E",  # Green
+                        "Neutral": "#F97316",   # Orange
+                        "Negative": "#EF4444"   # Red
+                    }
 
                     fig = px.pie(
                         sentiment_counts,
