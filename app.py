@@ -405,7 +405,7 @@ if st.button("Run Dashboard Analysis", type="primary"):
                 tone=ai_output.get("article_tone", "N/A")
             )
 
-                # Detailed Summary Section
+            # Detailed Summary Section
                 st.markdown('<div class="report-card">', unsafe_allow_html=True)
                 st.subheader("📝 Executive Summary & Tone Analysis")
                 st.write(ai_output.get("summary", ""))
